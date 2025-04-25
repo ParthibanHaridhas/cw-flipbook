@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ColorWhistle Flipbook Viewer</title>
+    <link rel="stylesheet" href="https://unpkg.com/stpageflip@2.0.0/css/stpageflip.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f5f5f5;
+            text-align: center;
+            padding: 20px;
+        }
+
+        #flipbook {
+            width: 90%;
+            height: 600px;
+            margin: auto;
+            max-width: 1100px;
+            max-height: 800px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        input[type="file"] {
+            margin: 20px 0;
+        }
+
+        .controls {
+            margin: 15px 0;
+        }
+
+        .controls button {
+            padding: 10px 15px;
+            border: none;
+            background: #0073e6;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 0 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>ColorWhistle Flipbook Viewer</h1>
+    <input type="file" id="fileUpload" accept="application/pdf">
+    <div id="flipbook"></div>
+    <div class="controls">
+        <button onclick="flip?.flipPrev()">⬅ Prev</button>
+        <button onclick="flip?.flipNext()">Next ➡</button>
+    </div>
+
+    <!-- PDF.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
+    <!-- StPageFlip -->
+    <script src="https://unpkg.com/stpageflip@2.0.0"></script>
+    <!-- Flip sound -->
+    <audio id="flipSound"
+        src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_80a9c79591.mp3?filename=paper-flip-4-102697.mp3"></audio>
+
+    <script>
+        let flip;
+        const flipbook = document.getElementById("flipbook");
+        const fileInput = document.getElementById("fileUpload");
+        const flipSound = document.getElementById("flipSound");
+
+        fileInput.addEventListener("change", async function (e) {
+            const file = e.target.files[0];
+            if (!file || file.type !== "application/pdf") {
+                alert("Please upload a PDF file.");
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = async function () {
+                const typedarray = new Uint8Array(this.result);
+                const pdf = await pdfjsLib.getDocument({ data: typedarray }).promise;
+                const pages = [];
+
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const viewport = page.getViewport({ scale: 2 });
+                    const canvas = document.createElement("canvas");
+                    const context = canvas.getContext("2d");
+                    canvas.height = viewport.height;
+                    canvas.width = viewport.width;
+
+                    await page.render({ canvasContext: context, viewport: viewport }).promise;
+                    const imgData = canvas.toDataURL("image/jpeg", 1.0);
+                    pages.push(imgData);
+                }
+
+                // Debug: log page count
+                console.log("Rendered pages:", pages.length);
+
+                // Wait until all images are fully loaded before initializing flipbook
+                await Promise.all(pages.map(src => new Promise((resolve) => {
+                    const img = new Image();
+                    img.onload = resolve;
+                    img.onerror = resolve;
+                    img.src = src;
+                })));
+
+                if (flip) flip.destroy();
+                flipbook.innerHTML = "";
+
+                flip = new St.PageFlip(flipbook, {
+                    width: 550,
+                    height: 733,
+                    size: "stretch",
+                    maxShadowOpacity: 0.5,
+                    showCover: false,
+                    mobileScrollSupport: false,
+                    useMouseEvents: true,
+                    flippingTime: 700,
+                    sound: true,
+                    disableFlipByClick: false,
+                    startPage: 0,
+                    autoSize: true,
+                    drawShadow: true,
+                    usePortrait: false,
+                    swipeDistance: 30,
+                    clickEventForward: false,
+                    useKeyboard: true,
+                    showHint: true,
+                    mode: "double"
+                });
+
+                flip.loadFromImages(pages);
+
+                flip.on("flip", () => {
+                    flipSound.currentTime = 0;
+                    flipSound.play();
+                });
+            };
+
+            reader.readAsArrayBuffer(file);
+        });
+    </script>
+</body>
+
+</html>
